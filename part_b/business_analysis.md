@@ -50,7 +50,7 @@ Once joined, the enriched transaction table is grouped by store_id × month × p
 
 
 ## B2.(b) Exploratory Data Analysis
-g transformation before fitting linear mode;
+
 **1. Hostogram of 'items sold'**
 Look for Skewness, outliers and multimadality.
 Check if the target is skewed or contains outliers. A right skewed distribution suggest a log transformation before fitting linear mode.
@@ -73,12 +73,33 @@ Check for interaction effects between the two categorical features a disproporti
 
 ## B2.(c) Discribe how imbalance effects the model
 
-When 80% of the dataset consist of transcations without any promotions, we are dealing with feature imbalance that can significantly impacts model's predective power. Model struggles to learn promotion specific effect.
+When 80% of the dataset consist of transcations without any promotions, we are dealing with feature imbalance that can significantly impacts model's predective power. Model struggles to learn promotion specific effect. To address this perform the following steps:
 
-Steps to address:
 1. Feature engineering: Create binary 'is_promoted' flag. This allows the model to firdt distinguish between presence (or) absence of offer before trying to calculate the weight of promotion type.
+
 2. Startified splitting: When performing temporal or random split, ensure that ratio of promoted to non-promoted transactions is preserved in both training ans testing sets to avoid evaluating on a non representative sample.
+
 3.Resampling Technique:  Over sampling technique - Increase the number of promoted rows in the training set so that model seees them frequently. / under sampling technique - reduce the number of no-promotion records to create more balance (50-50 or 50-60 split)
 
 
-Stratified Splitting: When performing your temporal or random split, ensure that the ratio of promoted to non-promoted transactions is preserved in both the training and testing sets to avoid evaluating on a non-representative sample.
+
+
+
+
+### B3. Model Evaluation and Deployment — 12 marks
+
+Sort all records chronologically and use the most recent 20% of monthsas the test set, with the earlier 80% as training — for example, trainon months 1–29 and test on months 30–36. This ensures the model is always evaluated on data it has never seen and that lies in the future relative to its training period, replicating real deployment conditions.
+
+**Why a random split is inappropriate:**
+
+A random split leaks future information into the training set — the model sees transactions from later months during training and is then tested on earlier ones. This is data leakage: it produces artificially optimistic metrics that will not hold in production, where the model must always predict forward in time from a fixed training cutoff.
+
+**Evaluation Metrics:**
+
+- **RMSE (Root Mean Squared Error)** — measures average prediction error in the same units as `items_sold`, penalising large errors heavily. In this context, a high RMSE signals the model struggles with peak periods like December, which matter most to the business.
+
+- **MAE (Mean Absolute Error)** — measures the average absolute errorwithout penalising large errors disproportionately. Easier to communicate to the marketing team — "on average the model is off by X items per store per month."
+
+- **R² (Coefficient of Determination)** — measures the proportion of variance in `items_sold` explained by the model. An R² of 0.80 means the model explains 80% of sales variation, giving a quick sense of overall fit quality.
+
+- **Promotion-level MAE** — compute MAE separately for each promotion type to check whether the model predicts some promotions more accurately than others. Poor MAE on a specific promotion signals insufficient training examples or missing interaction features for that promotion type

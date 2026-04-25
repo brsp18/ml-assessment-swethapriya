@@ -84,22 +84,53 @@ When 80% of the dataset consist of transcations without any promotions, we are d
 
 
 
+### B3.(a) Train & Test
 
-
-### B3. Model Evaluation and Deployment — 12 marks
-
-Sort all records chronologically and use the most recent 20% of monthsas the test set, with the earlier 80% as training — for example, trainon months 1–29 and test on months 30–36. This ensures the model is always evaluated on data it has never seen and that lies in the future relative to its training period, replicating real deployment conditions.
+Sort all records chronologically and use the most recent 20% of months as the test set, with the earlier 80% as training — For example, three years have 36 months. Train on months 1–29 and test on months 30–36. This ensures the model is always evaluated on data it has never seen and that lies in the future relative to its training period, replicating real deployment conditions.
 
 **Why a random split is inappropriate:**
+A random split leaks future information into the training set — the model sees transactions from later months during training and is then tested on earlier ones. This is called data leakage: There is high chance to generate artificially optimistic data that will not hold in production. Model is expected to predict future based on the past data.
 
-A random split leaks future information into the training set — the model sees transactions from later months during training and is then tested on earlier ones. This is data leakage: it produces artificially optimistic metrics that will not hold in production, where the model must always predict forward in time from a fixed training cutoff.
-
-**Evaluation Metrics:**
+## Evaluation Metrics:
 
 - **RMSE (Root Mean Squared Error)** — measures average prediction error in the same units as `items_sold`, penalising large errors heavily. In this context, a high RMSE signals the model struggles with peak periods like December, which matter most to the business.
 
-- **MAE (Mean Absolute Error)** — measures the average absolute errorwithout penalising large errors disproportionately. Easier to communicate to the marketing team — "on average the model is off by X items per store per month."
+- **MAE (Mean Absolute Error)** — measures the average absolute error without penalising large errors disproportionately. Easier to communicate to the marketing team — "on average the model is off by X items per store per month."
 
 - **R² (Coefficient of Determination)** — measures the proportion of variance in `items_sold` explained by the model. An R² of 0.80 means the model explains 80% of sales variation, giving a quick sense of overall fit quality.
 
 - **Promotion-level MAE** — compute MAE separately for each promotion type to check whether the model predicts some promotions more accurately than others. Poor MAE on a specific promotion signals insufficient training examples or missing interaction features for that promotion type
+
+
+### B3.(b) Concept of feature importance
+Store 12 has identical store-level features in both months — the difference is driven entirely by `month` and `is_festival`
+changing between December and March.
+
+Contrast the feature values for Store 12 in December vs. March. While store_size and location_type remain constant, features like month, is_festival, and is_weekend will differ.
+
+Review the Random Forest feature importance rankings. If `month`and `is_festival` appear near the top, it confirms the model has learned that seasonal and festive context is the primary driver of which promotion increases items sold — not store characteristics alone.
+
+Model identifies December as 'Festival' period. it clearly knows that during holidays, customers are ready for shopping. So instead of oddering discounts it recommends loyalty points which can lead to long-term value. 
+Coming to March, there are no hoildays and not festival period. So it becomes obevious to offer discount during this period. Customers prefer direct price discount to come to the store instead of going to competitor.
+
+This connects models output directly to customers behaviour not just guessing. Marketing team should recognize this and deploy promotions based on seasonal context rather than blackbox output.
+
+### B3.(c) Deployment
+
+To move from trained script to business functional tool, we need a robust deployment pipeline. This ensures that the marketing team recieves actionable recommendations evrrymonth without need od data scientists to rerun the training process manually every month.
+
+1. Use the joblib or pickle library to serialize the scikit-learn Pipeline object.
+2.This packages the StandardScaler, OneHotEncoder, and the RandomForestRegressor together. When you load it later, you don't need to remember the scaling parameters (mean/variance) from the training set; they are baked into the file.
+3. joblib.dump(pipeline, 'promotion_recommender_v1.pkl').
+
+Monthly Data preperation and scoring:
+
+At the begening of a every new month (e.g., June), create a spread sheet with 250 rows. One row for each store with deffirent promotion combinations (50 stores * 5 promotions). Fill the month number, weather there is festival, the number of weekends, along with fixed store details like size and location. Feed this spread sheet to the model.  The model will predict the number of items the promotion would sell in each store. At this point, pick the promotion with highest predicted sales - This is going to be the recommendation for that month.
+
+At the end of every month once we have the actual sales figures, compare it with what we predicted using the model. If model is predicting wrong, it is a sign that customer behaviour or market conditions have changed and the model is unable to keep it up to expectations.
+If a new competitor opens up in the market with several stores, which model has not seen before then it is clear that model recomendations will no longer be reliable.
+To track this we need to track the prediction every month. If error grows beyond the acceptable level, considet it as a warning sign. At this point there is s need to retrain the model using most recent data so that it learns from the current market scenario.
+The good rule of thumb is to retrain the model every six months as routine maintanance (or) immediately when you feel error threshold is breached.
+
+
+
